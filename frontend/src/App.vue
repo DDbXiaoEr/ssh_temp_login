@@ -51,9 +51,42 @@
         <button type="button" @click="download(result.signed_key)">下载 .pub</button>
         <span v-if="copied" class="copied">已复制</span>
       </div>
-      <p class="hint">
-        保存为 <code>id_ed25519-cert.pub</code>（与私钥同目录、同前缀），然后：
-        <code>ssh -i id_ed25519 -o CertificateFile=id_ed25519-cert.pub user@host</code>
+    </section>
+
+    <section v-if="result" class="howto" aria-labelledby="howto-title">
+      <h2 id="howto-title">签发后怎么用</h2>
+      <ol>
+        <li>
+          把证书存到私钥旁边，文件名必须是「私钥名 + <code>-cert.pub</code>」。
+          例如私钥是 <code>~/.ssh/id_ed25519</code>，证书就是
+          <code>~/.ssh/id_ed25519-cert.pub</code>。
+        </li>
+        <li>
+          确认证书内容和有效期：
+          <pre class="cmd">ssh-keygen -L -f ~/.ssh/id_ed25519-cert.pub</pre>
+          <code>Principals</code> 必须和登录用户一致，过期后无法登录。
+        </li>
+        <li>
+          登录目标机（目标机需已信任 Vault CA）：
+          <pre class="cmd">ssh -i ~/.ssh/id_ed25519 \
+  -o CertificateFile=~/.ssh/id_ed25519-cert.pub \
+  {{ result.principals || 'root' }}@&lt;target-host&gt;</pre>
+          若证书和私钥同目录、同前缀，OpenSSH 会自动带上证书，也可直接：
+          <pre class="cmd">ssh -i ~/.ssh/id_ed25519 {{ result.principals || 'root' }}@&lt;target-host&gt;</pre>
+        </li>
+        <li>
+          可选：写进 <code>~/.ssh/config</code>，以后不用每次带参数。
+          <pre class="cmd">Host &lt;alias&gt;
+  HostName &lt;target-host&gt;
+  User {{ result.principals || 'root' }}
+  IdentityFile ~/.ssh/id_ed25519
+  CertificateFile ~/.ssh/id_ed25519-cert.pub
+  IdentitiesOnly yes</pre>
+        </li>
+      </ol>
+      <p class="note">
+        目标机 <code>authorized_keys</code> 不必放你的公钥。
+        证书过期后重新签发即可，私钥可一直留在本机。
       </p>
     </section>
   </main>
@@ -148,8 +181,7 @@ function download(text) {
 }
 
 .cage,
-.lede,
-.hint {
+.lede {
   color: var(--steel);
 }
 
@@ -285,14 +317,45 @@ pre {
   color: var(--teal-ink);
 }
 
-.hint {
-  margin: 16px 0 0;
-  font-size: 0.8rem;
-  line-height: 1.55;
+.howto {
+  margin-top: 28px;
+  color: var(--paper);
 }
 
-.hint code {
-  color: var(--ink);
+.howto h2 {
+  margin-bottom: 16px;
+}
+
+.howto ol {
+  margin: 0;
+  padding-left: 1.3rem;
+  line-height: 1.65;
+}
+
+.howto li {
+  margin-bottom: 16px;
+}
+
+.howto code,
+.howto .cmd {
+  color: var(--paper);
+}
+
+.cmd {
+  margin: 8px 0 0;
+  padding: 12px 14px;
+  background: #0c1612;
+  border-left: 3px solid var(--teal);
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 0.82rem;
+}
+
+.note {
+  margin: 8px 0 0;
+  color: var(--steel);
+  font-size: 0.82rem;
+  line-height: 1.55;
 }
 
 @media (max-width: 640px) {
