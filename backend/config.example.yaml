@@ -1,0 +1,25 @@
+server:
+  addr: ":8080"
+  # 允许的前端来源，开发时保留 Vite 默认端口
+  cors_origins:
+    - "http://localhost:5173"
+    - "http://127.0.0.1:5173"
+  # 不配 cert/key 则走明文 HTTP；配上后启用 HTTPS。
+  # 再配 client_ca_file 即开启 mTLS。
+  tls:
+    cert_file: ""
+    key_file: ""
+    client_ca_file: ""
+    require_client_cert: false
+
+vault:
+  address: "https://127.0.0.1:8200"
+  token: "s.xxxxxxxxxxxxxxxx"
+  # Enterprise 命名空间，社区版留空
+  namespace: ""
+  # SSH secrets engine 挂载路径
+  mount: "ssh"
+  # 用于签发用户证书的 role
+  role: "user-cert"
+  tls_skip_verify: false
+  default_principals: ""
