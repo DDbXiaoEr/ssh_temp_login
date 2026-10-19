@@ -123,6 +123,22 @@ ssh -i ~/.ssh/id_ed25519 \
   <login-user>@<target-host>
 ```
 
+## 界面
+
+打开页面后粘贴公钥，签发成功会返回证书内容与过期时间。
+
+初始页：
+
+![初始页](docs/01-page.png)
+
+填写公钥：
+
+![填写公钥](docs/02-filled.png)
+
+签发结果：
+
+![签发结果](docs/03-issued.png)
+
 ## 目标机信任 Vault CA
 
 CA 公钥（无需 token，未认证接口）：
