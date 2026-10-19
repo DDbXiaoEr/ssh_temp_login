@@ -1,6 +1,6 @@
 BIN := build/ssh-sign
 CONFIG ?= backend/config.yaml
-ADDR ?= http://127.0.0.1:8080
+ADDR ?= https://127.0.0.1:8080
 
 .PHONY: all build frontend backend run open clean
 

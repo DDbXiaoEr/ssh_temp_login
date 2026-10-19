@@ -40,12 +40,28 @@ vault:
 
 不填 `server.tls.cert_file` / `key_file` 时走明文 HTTP。配上服务端证书后启用 HTTPS；再配 `client_ca_file` 即校验客户端证书（mTLS）。`require_client_cert: true` 时必须出示由该 CA 签发的客户端证书，否则握手失败。
 
+证书 SAN 含 `ssh.local`、`localhost`、`127.0.0.1`。浏览器访问请用这三个主机名之一。
+
+macOS 导入客户端证书，并把 CA 设为始终信任：
+
+```bash
+open <client.p12>
+open <ca.crt>
+```
+
+Vite 开发代理走 mTLS 时设置证书目录（不要把本机路径提交进仓库）：
+
+```bash
+export MTLS_CERT_DIR=<certs-dir>
+export MTLS_CLIENT=<client-name>
+```
+
 ```bash
 # 仅 HTTPS
-curl https://<listen-host>:8080/api/health --cacert <server-ca.pem>
+curl https://127.0.0.1:8080/api/health --cacert <server-ca.pem>
 
 # mTLS
-curl https://<listen-host>:8080/api/health \
+curl https://127.0.0.1:8080/api/health \
   --cacert <server-ca.pem> \
   --cert <client-cert.pem> \
   --key <client-key.pem>

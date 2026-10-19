@@ -4,13 +4,15 @@ server:
   cors_origins:
     - "http://localhost:5173"
     - "http://127.0.0.1:5173"
+    - "https://localhost:5173"
+    - "https://127.0.0.1:5173"
   # 不配 cert/key 则走明文 HTTP；配上后启用 HTTPS。
-  # 再配 client_ca_file 即开启 mTLS。
+  # 再配 client_ca_file 即开启 mTLS。服务端证书建议用 fullchain（leaf + CA）。
   tls:
     cert_file: ""
     key_file: ""
     client_ca_file: ""
-    require_client_cert: false
+    require_client_cert: true
 
 vault:
   address: "https://127.0.0.1:8200"
