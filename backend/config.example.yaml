@@ -6,22 +6,12 @@ server:
     - "http://127.0.0.1:5173"
     - "https://localhost:5173"
     - "https://127.0.0.1:5173"
+  # 本服务作为 HTTPS 服务端：只需下面三项，不要配 client.crt / client.key。
   # 不配 cert/key 则走明文 HTTP；配上后启用 HTTPS。
+  # client_ca_file 是用来校验客户端的 CA（不是客户端证书）。
   # 再配 client_ca_file 即开启 mTLS。服务端证书建议用 fullchain（leaf + CA）。
   tls:
     cert_file: ""
     key_file: ""
     client_ca_file: ""
     require_client_cert: true
-
-vault:
-  address: "https://127.0.0.1:8200"
-  token: "s.xxxxxxxxxxxxxxxx"
-  # Enterprise 命名空间，社区版留空
-  namespace: ""
-  # SSH secrets engine 挂载路径
-  mount: "ssh"
-  # 用于签发用户证书的 role
-  role: "user-cert"
-  tls_skip_verify: false
-  default_principals: ""

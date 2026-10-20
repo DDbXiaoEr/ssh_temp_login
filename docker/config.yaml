@@ -1,0 +1,8 @@
+server:
+  addr: ":8080"
+  cors_origins: []
+  tls:
+    cert_file: ""
+    key_file: ""
+    client_ca_file: ""
+    require_client_cert: false

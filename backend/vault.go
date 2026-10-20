@@ -24,7 +24,12 @@ type SignResult struct {
 func NewVaultClient(cfg VaultConfig) (*VaultClient, error) {
 	vaultCfg := api.DefaultConfig()
 	vaultCfg.Address = cfg.Address
-	if err := vaultCfg.ConfigureTLS(&api.TLSConfig{Insecure: cfg.TLSSkipVerify}); err != nil {
+	if err := vaultCfg.ConfigureTLS(&api.TLSConfig{
+		CACert:     cfg.CACert,
+		ClientCert: cfg.ClientCert,
+		ClientKey:  cfg.ClientKey,
+		Insecure:   cfg.TLSSkipVerify,
+	}); err != nil {
 		return nil, fmt.Errorf("vault tls: %w", err)
 	}
 

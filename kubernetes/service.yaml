@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ssh-sign
+  namespace: ssh-sign
+  labels:
+    app: ssh-sign
+spec:
+  type: ClusterIP
+  selector:
+    app: ssh-sign
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

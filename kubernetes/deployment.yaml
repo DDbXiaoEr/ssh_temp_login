@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ssh-sign
+  namespace: ssh-sign
+  labels:
+    app: ssh-sign
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ssh-sign
+  template:
+    metadata:
+      labels:
+        app: ssh-sign
+    spec:
+      containers:
+        - name: ssh-sign
+          image: ssh-sign:GIT_HASH
+          imagePullPolicy: IfNotPresent
+          args:
+            - -config
+            - /etc/ssh-sign/config.yaml
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: ssh-sign-vault
+          volumeMounts:
+            - name: config
+              mountPath: /etc/ssh-sign
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: config
+          configMap:
+            name: ssh-sign

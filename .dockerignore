@@ -1,0 +1,3 @@
+*
+!build/ssh-sign-linux
+!docker/config.yaml
