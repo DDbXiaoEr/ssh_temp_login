@@ -343,3 +343,7 @@ ssh -i ~/.ssh/id_ed25519 \
 ```
 
 证书有效期由 Vault role 决定，请求里不传 TTL。
+
+## License
+
+[WTFPL](http://www.wtfpl.net/)
