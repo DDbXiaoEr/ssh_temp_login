@@ -9,7 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var ginMode = gin.DebugMode
+
 func main() {
+	gin.SetMode(ginMode)
+
 	configPath := flag.String("config", "config.yaml", "path to yaml config")
 	flag.Parse()
 
