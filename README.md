@@ -1,5 +1,7 @@
 # 临时 SSH 登录证书签发
 
+[中文](README.md) | [English](README.en.md)
+
 前端提交 OpenSSH 公钥，Go/Gin 后端向 Vault SSH CA 申请签名，把短期用户证书返回给前端。Vue 构建产物通过 `go:embed` 打进同一个二进制。
 
 ## 目录

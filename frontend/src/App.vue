@@ -1,55 +1,61 @@
 <template>
-  <main class="desk">
-    <header class="mast">
-      <p class="cage">Cage 157 · SSH CA</p>
+  <main class="hall">
+    <header class="plate">
       <h1>临时登录证书签发台</h1>
       <p class="lede">
-        贴上本机公钥，向 Vault 领取一张短时用户证书。证书过期即失效，不必回收私钥。
+        贴上本机公钥，领取一张短时用户证书。过期即失效，不必回收私钥。
       </p>
     </header>
 
-    <section class="slip" aria-labelledby="request-title">
-      <div class="slip-head">
-        <h2 id="request-title">领取单</h2>
-      </div>
+    <form class="kiosk" aria-labelledby="request-title" @submit.prevent="sign">
+      <h2 id="request-title" class="sr">申请证书</h2>
 
-      <label class="field">
-        <span>OpenSSH 公钥</span>
+      <div class="field key">
+        <div class="field-head">
+          <label for="pubkey">OpenSSH 公钥</label>
+          <label class="pick">
+            选择文件
+            <input type="file" accept=".pub,text/plain" @change="loadKeyFile" />
+          </label>
+        </div>
         <textarea
+          id="pubkey"
           v-model="publicKey"
-          rows="5"
+          rows="7"
           spellcheck="false"
           placeholder="ssh-ed25519 AAAA... user@host"
         />
-      </label>
-
-      <label class="field">
-        <span>登录用户</span>
-        <input v-model="principals" placeholder="root" />
-      </label>
-
-      <div class="actions">
-        <button type="button" class="issue" :disabled="busy" @click="sign">
-          {{ busy ? '正在盖章…' : '签发证书' }}
-        </button>
-        <p v-if="error" class="err">{{ error }}</p>
       </div>
-    </section>
 
-    <section v-if="result" class="ticket" aria-labelledby="ticket-title">
-      <div class="perforation" aria-hidden="true" />
-      <div class="ticket-head">
-        <h2 id="ticket-title">已签发</h2>
-        <p>
-          序列号 {{ result.serial_number || '—' }}
-          · {{ result.principals }}
-        </p>
+      <div class="side">
+        <label class="field">
+          <span>登录用户</span>
+          <input v-model="principals" placeholder="root" autocomplete="username" />
+        </label>
+
+        <div class="actions">
+          <button type="submit" class="issue" :disabled="busy">
+            {{ busy ? '正在签发' : '签发证书' }}
+          </button>
+          <p v-if="error" class="err" role="alert">{{ error }}</p>
+        </div>
       </div>
-      <pre>{{ result.signed_key }}</pre>
-      <div class="ticket-actions">
-        <button type="button" @click="copy(result.signed_key)">复制证书</button>
-        <button type="button" @click="download(result.signed_key)">下载 .pub</button>
-        <span v-if="copied" class="copied">已复制</span>
+    </form>
+
+    <section v-if="result" class="pass" aria-labelledby="pass-title">
+      <div class="stripe" aria-hidden="true" />
+      <div class="pass-face">
+        <div class="pass-meta">
+          <h2 id="pass-title">{{ result.principals || '—' }}</h2>
+          <p>序列 {{ result.serial_number || '—' }}</p>
+        </div>
+        <pre>{{ result.signed_key }}</pre>
+        <div class="pass-actions">
+          <button type="button" @click="copy(result.signed_key)">
+            {{ copied ? '已复制' : '复制证书' }}
+          </button>
+          <button type="button" @click="download(result.signed_key)">下载证书</button>
+        </div>
       </div>
     </section>
 
@@ -118,6 +124,24 @@ onMounted(async () => {
   }
 })
 
+async function loadKeyFile(event) {
+  const input = event.target
+  const file = input.files && input.files[0]
+  input.value = ''
+  if (!file) return
+  error.value = ''
+  try {
+    const text = (await file.text()).trim()
+    if (!text) {
+      error.value = '文件是空的'
+      return
+    }
+    publicKey.value = text
+  } catch {
+    error.value = '无法读取所选文件'
+  }
+}
+
 async function sign() {
   error.value = ''
   result.value = null
@@ -165,170 +189,241 @@ function download(text) {
 </script>
 
 <style scoped>
-.desk {
-  max-width: 920px;
+.hall {
+  max-width: 960px;
   margin: 0 auto;
-  padding: 48px 24px 80px;
+  padding: 40px 24px 88px;
 }
 
-.mast h1 {
-  margin: 8px 0 12px;
-  font-family: Syne, sans-serif;
-  font-size: clamp(2.4rem, 6vw, 4.4rem);
+.plate h1,
+.pass-meta h2,
+input {
+  font-family: "Big Shoulders Display", "Impact", "IBM Plex Sans", sans-serif;
+}
+
+.plate h1 {
+  margin: 0 0 12px;
+  color: var(--enamel);
+  font-size: clamp(2.4rem, 6vw, 4.2rem);
   font-weight: 800;
-  line-height: 0.92;
   letter-spacing: -0.04em;
+  line-height: 0.92;
 }
 
-.cage,
-.lede {
-  color: var(--steel);
-}
-
-.cage {
-  margin: 0;
-  font-size: 0.85rem;
+.pass-meta h2 {
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 0.86;
 }
 
 .lede {
-  max-width: 42rem;
+  max-width: 38rem;
   margin: 0;
-  line-height: 1.6;
+  color: var(--mute);
+  line-height: 1.55;
 }
 
-.slip,
-.ticket {
-  margin-top: 36px;
-  background: var(--paper);
-  color: var(--ink);
-  padding: 28px 28px 24px;
+.kiosk {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(16rem, 0.9fr);
+  gap: 28px 36px;
+  margin-top: 40px;
+  padding: 28px 0 8px;
+  border-top: 8px solid var(--enamel);
 }
 
-.slip-head,
-.ticket-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 16px;
-  border-bottom: 1px dashed var(--line);
-  padding-bottom: 12px;
-  margin-bottom: 20px;
-}
-
-h2 {
-  margin: 0;
-  font-family: Syne, sans-serif;
-  font-size: 1.4rem;
-  letter-spacing: -0.03em;
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }
 
 .field {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 16px;
 }
 
-.field span {
-  color: var(--teal-ink);
-  font-size: 0.82rem;
+.field span,
+.field-head,
+.field-head label {
+  color: var(--mute);
+  font-size: 0.92rem;
+}
+
+.field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pick {
+  position: relative;
+  color: var(--enamel);
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.field-head .pick {
+  color: var(--enamel);
+}
+
+.pick input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 0;
+  padding: 0;
 }
 
 textarea,
 input {
   width: 100%;
   border: 0;
-  border-bottom: 2px solid var(--line);
-  background: transparent;
+  border-radius: 0;
+  background: var(--badge);
   color: var(--ink);
-  padding: 8px 0;
+  padding: 12px 14px;
+}
+
+textarea {
+  min-height: 11.5rem;
   resize: vertical;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+input {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
 textarea:focus,
 input:focus,
 button:focus-visible {
-  outline: 2px solid var(--teal);
+  outline: 3px solid var(--enamel);
   outline-offset: 3px;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
 }
 
 .actions {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-top: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
 }
 
 .issue {
-  background: var(--stamp);
-  color: #fff8f0;
+  background: var(--sodium);
+  color: var(--sodium-ink);
   border: 0;
-  padding: 12px 22px;
-  font-family: Syne, sans-serif;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  padding: 14px 22px;
+  font-weight: 600;
 }
 
 .issue:disabled {
   opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .err {
   margin: 0;
-  color: var(--stamp);
+  color: var(--fault);
+  line-height: 1.4;
 }
 
-.ticket {
-  position: relative;
-  background: #f3e7c8;
+.pass {
+  margin-top: 36px;
+  background: var(--badge);
+  color: var(--ink);
+  box-shadow: 12px 12px 0 var(--enamel-deep);
 }
 
-.perforation {
-  position: absolute;
-  inset: 0 auto 0 -10px;
-  width: 20px;
+.stripe {
+  height: 42px;
   background:
-    radial-gradient(circle at 10px 10px, var(--ink) 5px, transparent 5.5px) 0 0 / 20px 20px;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 40%),
+    repeating-linear-gradient(
+      90deg,
+      var(--stripe) 0 3px,
+      #1a140e 3px 5px,
+      #2e241a 5px 8px
+    );
+}
+
+.pass-face {
+  padding: 22px 24px 20px;
+}
+
+.pass-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.pass-meta h2 {
+  margin: 0;
+  font-size: clamp(2.2rem, 6vw, 3.6rem);
+}
+
+.pass-meta p {
+  margin: 0;
+  color: var(--mute);
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.84rem;
 }
 
 pre {
   margin: 0;
+  padding: 14px 16px;
+  background: var(--slot);
   white-space: pre-wrap;
   word-break: break-all;
   line-height: 1.5;
-  font-size: 0.82rem;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
 }
 
-.ticket-actions {
+.pass-actions {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 16px;
 }
 
-.ticket-actions button {
-  background: var(--teal);
-  color: var(--paper);
+.pass-actions button {
+  background: var(--enamel);
+  color: var(--badge);
   border: 0;
-  padding: 8px 14px;
-}
-
-.copied {
-  color: var(--teal-ink);
+  padding: 9px 14px;
 }
 
 .howto {
-  margin-top: 28px;
-  color: var(--paper);
+  margin-top: 40px;
+  max-width: 42rem;
 }
 
 .howto h2 {
-  margin-bottom: 16px;
+  margin: 0 0 16px;
+  font-size: 1.2rem;
 }
 
 .howto ol {
   margin: 0;
-  padding-left: 1.3rem;
+  padding-left: 1.25rem;
   line-height: 1.65;
 }
 
@@ -337,34 +432,50 @@ pre {
 }
 
 .howto code,
-.howto .cmd {
-  color: var(--paper);
+.cmd {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.84em;
 }
 
 .cmd {
   margin: 8px 0 0;
   padding: 12px 14px;
-  background: #0c1612;
-  border-left: 3px solid var(--teal);
+  background: var(--enamel-deep);
+  color: var(--badge);
   white-space: pre-wrap;
   word-break: break-all;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
 }
 
 .note {
-  margin: 8px 0 0;
-  color: var(--steel);
-  font-size: 0.82rem;
+  margin: 4px 0 0;
+  color: var(--mute);
+  font-size: 0.92rem;
   line-height: 1.55;
 }
 
-@media (max-width: 640px) {
-  .slip-head,
-  .ticket-head,
-  .actions,
-  .ticket-actions {
+@media (max-width: 760px) {
+  .kiosk,
+  .pass-meta {
     display: grid;
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pass {
+    animation: print 0.35s ease-out;
+  }
+}
+
+@keyframes print {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 </style>
