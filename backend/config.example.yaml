@@ -15,3 +15,15 @@ server:
     key_file: ""
     client_ca_file: ""
     require_client_cert: true
+
+# 可选的签发角色列表。前端会按这里的 description 展示类型供用户选择。
+# 配置了 vault.roles 后，VAULT_ROLE 环境变量会被忽略；
+# VAULT_ADDR / VAULT_TOKEN 等连接信息仍然只从环境变量读取。
+vault:
+  roles:
+    - role: "user-cert"
+      description: "日常登录：允许 root，证书 10 分钟有效"
+      default_principals: "root"
+    - role: "readonly"
+      description: "只读排障：允许 readonly 用户，证书 5 分钟有效"
+      default_principals: "readonly"

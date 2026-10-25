@@ -28,15 +28,21 @@ type TLSConfig struct {
 }
 
 type VaultConfig struct {
-	Address           string `yaml:"address"`
-	Token             string `yaml:"token"`
-	Namespace         string `yaml:"namespace"`
-	Mount             string `yaml:"mount"`
+	Address           string      `yaml:"address"`
+	Token             string      `yaml:"token"`
+	Namespace         string      `yaml:"namespace"`
+	Mount             string      `yaml:"mount"`
+	Roles             []VaultRole `yaml:"roles"`
+	TLSSkipVerify     bool        `yaml:"tls_skip_verify"`
+	CACert            string      `yaml:"ca_cert"`
+	ClientCert        string      `yaml:"client_cert"`
+	ClientKey         string      `yaml:"client_key"`
+	DefaultPrincipals string      `yaml:"default_principals"`
+}
+
+type VaultRole struct {
 	Role              string `yaml:"role"`
-	TLSSkipVerify     bool   `yaml:"tls_skip_verify"`
-	CACert            string `yaml:"ca_cert"`
-	ClientCert        string `yaml:"client_cert"`
-	ClientKey         string `yaml:"client_key"`
+	Description       string `yaml:"description"`
 	DefaultPrincipals string `yaml:"default_principals"`
 }
 
@@ -69,7 +75,17 @@ func applyVaultFromEnv(cfg *Config) error {
 
 	addr := requireEnv("VAULT_ADDR", &missing)
 	token := requireEnv("VAULT_TOKEN", &missing)
-	role := requireEnv("VAULT_ROLE", &missing)
+
+	roles := cfg.Vault.Roles
+	if len(roles) == 0 {
+		role := requireEnv("VAULT_ROLE", &missing)
+		if role != "" {
+			roles = []VaultRole{{
+				Role:        role,
+				Description: "通过 VAULT_ROLE 环境变量配置",
+			}}
+		}
+	}
 
 	mount := envOr("VAULT_MOUNT", "ssh")
 	skipVerify, err := envBool("VAULT_TLS_SKIP_VERIFY")
@@ -100,6 +116,10 @@ func applyVaultFromEnv(cfg *Config) error {
 		return fmt.Errorf("missing required environment variables:\n  - %s", strings.Join(missing, "\n  - "))
 	}
 
+	if err := validateRoles(roles); err != nil {
+		return err
+	}
+
 	if caCert != "" || clientCert != "" || clientKey != "" {
 		for _, p := range []struct {
 			key  string
@@ -120,12 +140,34 @@ func applyVaultFromEnv(cfg *Config) error {
 		Token:             token,
 		Namespace:         strings.TrimSpace(os.Getenv("VAULT_NAMESPACE")),
 		Mount:             mount,
-		Role:              role,
+		Roles:             roles,
 		TLSSkipVerify:     skipVerify,
 		CACert:            caCert,
 		ClientCert:        clientCert,
 		ClientKey:         clientKey,
 		DefaultPrincipals: strings.TrimSpace(os.Getenv("VAULT_DEFAULT_PRINCIPALS")),
+	}
+	return nil
+}
+
+func validateRoles(roles []VaultRole) error {
+	if len(roles) == 0 {
+		return fmt.Errorf("vault.roles must contain at least one role, or set VAULT_ROLE")
+	}
+
+	seen := make(map[string]struct{}, len(roles))
+	for i := range roles {
+		roles[i].Role = strings.TrimSpace(roles[i].Role)
+		roles[i].Description = strings.TrimSpace(roles[i].Description)
+		roles[i].DefaultPrincipals = strings.TrimSpace(roles[i].DefaultPrincipals)
+
+		if roles[i].Role == "" {
+			return fmt.Errorf("vault.roles[%d].role is required", i)
+		}
+		if _, ok := seen[roles[i].Role]; ok {
+			return fmt.Errorf("vault.roles contains duplicate role %q", roles[i].Role)
+		}
+		seen[roles[i].Role] = struct{}{}
 	}
 	return nil
 }

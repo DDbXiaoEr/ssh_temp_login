@@ -9,10 +9,8 @@ import (
 )
 
 type VaultClient struct {
-	logical           *api.Logical
-	mount             string
-	role              string
-	defaultPrincipals string
+	logical *api.Logical
+	mount   string
 }
 
 type SignResult struct {
@@ -43,18 +41,17 @@ func NewVaultClient(cfg VaultConfig) (*VaultClient, error) {
 	}
 
 	return &VaultClient{
-		logical:           client.Logical(),
-		mount:             strings.Trim(cfg.Mount, "/"),
-		role:              cfg.Role,
-		defaultPrincipals: cfg.DefaultPrincipals,
+		logical: client.Logical(),
+		mount:   strings.Trim(cfg.Mount, "/"),
 	}, nil
 }
 
-func (c *VaultClient) Sign(ctx context.Context, publicKey, principals string) (*SignResult, error) {
+func (c *VaultClient) Sign(ctx context.Context, publicKey, principals, role string) (*SignResult, error) {
 	publicKey = strings.TrimSpace(publicKey)
 	principals = strings.TrimSpace(principals)
-	if principals == "" {
-		principals = c.defaultPrincipals
+	role = strings.TrimSpace(role)
+	if role == "" {
+		return nil, fmt.Errorf("vault role is empty")
 	}
 
 	payload := map[string]interface{}{
@@ -65,7 +62,7 @@ func (c *VaultClient) Sign(ctx context.Context, publicKey, principals string) (*
 		payload["valid_principals"] = principals
 	}
 
-	path := fmt.Sprintf("%s/sign/%s", c.mount, c.role)
+	path := fmt.Sprintf("%s/sign/%s", c.mount, role)
 	secret, err := c.logical.WriteWithContext(ctx, path, payload)
 	if err != nil {
 		return nil, fmt.Errorf("vault sign: %w", err)

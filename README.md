@@ -24,7 +24,7 @@ Makefile     构建、运行、镜像
 | 本服务当 HTTPS 服务端 | CA、server 证书、server 私钥 | `server.tls` |
 | 本服务当 Vault 客户端 | Vault CA、client 证书、client 私钥 | `VAULT_CACERT` / `VAULT_CLIENT_CERT` / `VAULT_CLIENT_KEY` |
 
-复制 `backend/config.example.yaml` 为 `backend/config.yaml`，只放 HTTP/TLS 配置：
+复制 `backend/config.example.yaml` 为 `backend/config.yaml`。它放 HTTP/TLS 配置，以及可选的签发角色：
 
 ```yaml
 server:
@@ -36,27 +36,39 @@ server:
     key_file: "<server-key.pem>"         # 本服务私钥
     client_ca_file: "<client-ca.pem>"    # 校验客户端的 CA，不是 client.crt
     require_client_cert: true
+
+vault:
+  roles:
+    - role: "user-cert"                  # Vault SSH role 名称
+      description: "日常登录：允许 root，10 分钟有效"
+      default_principals: "root"         # 前端默认填写的登录用户
+    - role: "readonly"
+      description: "只读排障：允许 readonly 用户，5 分钟有效"
+      default_principals: "readonly"
 ```
 
 服务端开 mTLS 只需要上面三份文件，不要把 `client.crt` / `client.key` 写进 `server.tls`。
 
-Vault 信息必须从环境变量读取。启动时会校验，缺项会列出清单并退出：
+配置多个角色后，前端会显示角色卡片和对应描述，用户选择后再签发。`default_principals` 会作为该角色的默认登录用户；角色描述只用于界面展示，证书有效期和允许用户仍由 Vault role 控制。
+
+`vault.roles` 与 `VAULT_ROLE` 二选一：只要 YAML 里配置了 `roles`，`VAULT_ROLE` 就会被忽略。没有配置 `roles` 时，仍可用 `VAULT_ROLE` 走单角色模式。
+
+Vault 连接信息必须从环境变量读取。启动时会校验，缺项会列出清单并退出；配置了 `vault.roles` 时不再要求 `VAULT_ROLE`：
 
 ```
 load config: missing required environment variables:
   - VAULT_ADDR
   - VAULT_TOKEN
-  - VAULT_ROLE
 ```
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
 | `VAULT_ADDR` | 是 | Vault 地址 |
 | `VAULT_TOKEN` | 是 | Vault token |
-| `VAULT_ROLE` | 是 | SSH secrets engine 的签发 role |
+| `VAULT_ROLE` | 仅未配置 `vault.roles` 时 | SSH secrets engine 的签发 role |
 | `VAULT_MOUNT` | 否 | 挂载路径，默认 `ssh` |
 | `VAULT_NAMESPACE` | 否 | Enterprise 命名空间 |
-| `VAULT_DEFAULT_PRINCIPALS` | 否 | 默认登录用户 |
+| `VAULT_DEFAULT_PRINCIPALS` | 否 | 角色没有 `default_principals` 时的回退登录用户 |
 | `VAULT_TLS_SKIP_VERIFY` | 否 | 跳过 Vault TLS 校验，默认 `false` |
 | `VAULT_MTLS` | 否 | `true` 时强制要求本服务向 Vault 出示客户端证书 |
 | `VAULT_CACERT` | 连 Vault 走 mTLS 时 | 校验 Vault 服务端证书的 CA |
@@ -70,6 +82,7 @@ load config: missing required environment variables:
 ```bash
 export VAULT_ADDR="https://<vault-host>:8200"
 export VAULT_TOKEN="<vault-token>"
+# 单角色模式使用；已配置 vault.roles 时忽略
 export VAULT_ROLE="<ssh-role>"
 export VAULT_DEFAULT_PRINCIPALS="<login-user>"
 
@@ -79,6 +92,8 @@ export VAULT_CACERT="/certs/ca.crt"
 export VAULT_CLIENT_CERT="/certs/client.crt"
 export VAULT_CLIENT_KEY="/certs/client.key"
 ```
+
+多角色模式不需要 `VAULT_ROLE`；把角色写进 `config.yaml`，并在每个角色里设置 `description` 和可选的 `default_principals`。
 
 ### 本服务 TLS / mTLS
 
@@ -199,6 +214,16 @@ docker run --rm -p 8080:8080 \
   ssh-sign:<git-hash>
 ```
 
+多角色模式把 `config.yaml` 挂到镜像默认路径（内含 `vault.roles`），此时不再需要 `VAULT_ROLE`：
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e VAULT_ADDR="https://<vault-host>:8200" \
+  -e VAULT_TOKEN="<vault-token>" \
+  -v /path/to/config.yaml:/etc/ssh-sign/config.yaml:ro \
+  ssh-sign:<git-hash>
+```
+
 Vault 要求客户端证书时，再挂 **Vault 客户端** 证书（不是本服务的 server 证书）：
 
 ```bash
@@ -220,7 +245,7 @@ docker run --rm -p 8080:8080 \
 
 ## Kubernetes
 
-清单在 `kubernetes/`，用 kustomize 部署。先改 `kubernetes/secret.yaml` 里的 Vault 地址、token、role，再把镜像 tag 换成刚构建的 git hash：
+清单在 `kubernetes/`，用 kustomize 部署。先改 `kubernetes/secret.yaml` 里的 Vault 地址、token，以及 `kubernetes/configmap.yaml` 里的 `vault.roles`，再把镜像 tag 换成刚构建的 git hash：
 
 ```bash
 make docker
@@ -237,8 +262,8 @@ kubectl apply -k .
 默认会创建：
 
 - Namespace `ssh-sign`
-- ConfigMap：容器内 `/etc/ssh-sign/config.yaml`
-- Secret `ssh-sign-vault`：`VAULT_ADDR` / `VAULT_TOKEN` / `VAULT_ROLE` 等
+- ConfigMap：容器内 `/etc/ssh-sign/config.yaml`，包含服务配置和 `vault.roles`
+- Secret `ssh-sign-vault`：`VAULT_ADDR` / `VAULT_TOKEN` 等；`VAULT_ROLE` 仅作单角色回退
 - Deployment + Service（ClusterIP `:8080`）
 
 `kubernetes/mtls-patch.yaml` 和 Secret `ssh-sign-vault-mtls` 只用于 **本服务访问 Vault**（客户端证书），不会给本服务的 `:8080` 开 HTTPS/mTLS。ConfigMap 里 `server.tls` 默认是空的。
@@ -278,7 +303,7 @@ curl http://127.0.0.1:8080/api/health
 
 ## 界面
 
-打开页面后粘贴公钥，签发成功会返回证书内容与过期时间。
+打开页面后先选择签发类型，再粘贴公钥；签发成功会返回证书内容与序列号。
 
 初始页：
 
@@ -333,18 +358,19 @@ ssh -i ~/.ssh/id_ed25519 \
 
 ## API
 
-`GET /api/health`  
-`GET /api/info` — 默认登录用户  
-`POST /api/sign`
+- `GET /api/health`
+- `GET /api/info` — 默认登录用户和可选角色列表（含描述、角色默认用户）
+- `POST /api/sign`
 
 ```json
 {
   "public_key": "ssh-ed25519 AAAA...",
-  "valid_principals": "<login-user>"
+  "valid_principals": "<login-user>",
+  "role": "<role>"
 }
 ```
 
-证书有效期由 Vault role 决定，请求里不传 TTL。
+`role` 对应 `config.yaml` 中 `vault.roles[].role`；只有一个角色时可以省略。证书有效期由 Vault role 决定，请求里不传 TTL。
 
 ## License
 

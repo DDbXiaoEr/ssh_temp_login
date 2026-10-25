@@ -6,3 +6,13 @@ server:
     key_file: ""
     client_ca_file: ""
     require_client_cert: false
+
+# 多角色配置示例。取消注释后 VAULT_ROLE 会被忽略，连接信息仍从环境变量读取。
+# vault:
+#   roles:
+#     - role: "user-cert"
+#       description: "日常登录：允许 root，证书 10 分钟有效"
+#       default_principals: "root"
+#     - role: "readonly"
+#       description: "只读排障：允许 readonly 用户，证书 5 分钟有效"
+#       default_principals: "readonly"
