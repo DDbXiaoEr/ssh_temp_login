@@ -14,6 +14,13 @@ data:
         client_ca_file: ""
         require_client_cert: false
     vault:
+      roles:
+        - role: "user-cert"
+          description: "日常登录：允许 root，证书 10 分钟有效"
+          default_principals: "root"
+        - role: "readonly"
+          description: "只读排障：允许 readonly 用户，证书 5 分钟有效"
+          default_principals: "readonly"
       # Vault 开启 mTLS 时填这里；也可以用 VAULT_CACERT 等环境变量覆盖。
       mtls: false
       tls_skip_verify: false

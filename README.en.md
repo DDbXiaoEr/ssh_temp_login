@@ -24,7 +24,7 @@ There are two TLS layers. Do not mix the certificates:
 | This service as HTTPS server | CA, server cert, server key | `server.tls` |
 | This service as Vault client | Vault CA, client cert, client key | `vault.ca_cert` / `vault.client_cert` / `vault.client_key`, or `VAULT_CACERT` / `VAULT_CLIENT_CERT` / `VAULT_CLIENT_KEY` |
 
-Copy `backend/config.example.yaml` to `backend/config.yaml`. It holds HTTP/TLS settings and the Vault client certificate:
+Copy `backend/config.example.yaml` to `backend/config.yaml`. It holds HTTP/TLS settings, optional signing roles, and the Vault client certificate:
 
 ```yaml
 server:
@@ -37,8 +37,17 @@ server:
     client_ca_file: "<client-ca.pem>"    # CA used to verify clients, not client.crt
     require_client_cert: true
 
-# only when Vault has mTLS enabled
 vault:
+  # optional: multi-role mode; without it, VAULT_ROLE is used
+  roles:
+    - role: "user-cert"                  # Vault SSH role name
+      description: "Daily login: root, valid for 10 minutes"
+      default_principals: "root"         # login user prefilled in the UI
+    - role: "readonly"
+      description: "Read-only troubleshooting: readonly user, valid for 5 minutes"
+      default_principals: "readonly"
+
+  # only when Vault has mTLS enabled
   mtls: true
   ca_cert: "<vault-ca.pem>"
   client_cert: "<vault-client-cert.pem>"
@@ -48,23 +57,26 @@ vault:
 
 Server-side mTLS only needs the three files under `server.tls`. Do not put `client.crt` / `client.key` in `server.tls`.
 
-Vault address, token, and role still come from environment variables. Startup validates them and exits with a missing-item list:
+With multiple roles configured, the frontend shows each role as a card with its description and requires a choice before signing. `default_principals` prefills the login user for that role; the description is display-only, while certificate TTL and allowed users stay under the Vault role.
+
+Use either `vault.roles` or `VAULT_ROLE`: as soon as YAML defines `roles`, `VAULT_ROLE` is ignored. Without `roles`, the legacy single-role `VAULT_ROLE` mode still works.
+
+Vault address and token still come from environment variables. When Vault uses mTLS, put the client certificate in the `vault` section (environment variables can override it). Startup validates the settings and exits with a missing-item list; when `vault.roles` is configured, `VAULT_ROLE` is no longer required:
 
 ```
 load config: missing required environment variables:
   - VAULT_ADDR
   - VAULT_TOKEN
-  - VAULT_ROLE
 ```
 
 | Variable | Required | Description |
 | --- | --- | --- |
 | `VAULT_ADDR` | yes | Vault address |
 | `VAULT_TOKEN` | yes | Vault token |
-| `VAULT_ROLE` | yes | SSH secrets engine signing role |
+| `VAULT_ROLE` | only without `vault.roles` | SSH secrets engine signing role |
 | `VAULT_MOUNT` | no | mount path, default `ssh` |
 | `VAULT_NAMESPACE` | no | Enterprise namespace |
-| `VAULT_DEFAULT_PRINCIPALS` | no | default login user |
+| `VAULT_DEFAULT_PRINCIPALS` | no | fallback login user when a role has no `default_principals` |
 | `VAULT_TLS_SKIP_VERIFY` | no | skip Vault TLS verify, default `false` |
 | `VAULT_MTLS` | no | `true` forces this service to present a client cert to Vault |
 | `VAULT_CACERT` | when talking to Vault over mTLS | CA used to verify Vault's server cert |
@@ -78,6 +90,7 @@ If you set `vault.mtls: true`, `VAULT_MTLS=true`, or fill any of the `CA` / `cli
 ```bash
 export VAULT_ADDR="https://<vault-host>:8200"
 export VAULT_TOKEN="<vault-token>"
+# legacy single-role mode; ignored when vault.roles is configured
 export VAULT_ROLE="<ssh-role>"
 export VAULT_DEFAULT_PRINCIPALS="<login-user>"
 
@@ -88,6 +101,8 @@ export VAULT_CACERT="/certs/ca.crt"
 export VAULT_CLIENT_CERT="/certs/client.crt"
 export VAULT_CLIENT_KEY="/certs/client.key"
 ```
+
+Multi-role mode does not need `VAULT_ROLE`. Put roles in `config.yaml` and give each one a `description` plus an optional `default_principals`.
 
 ### This service TLS / mTLS
 
@@ -208,6 +223,16 @@ docker run --rm -p 8080:8080 \
   ssh-sign:<git-hash>
 ```
 
+For multi-role mode, mount a `config.yaml` with `vault.roles` at the image's default path; `VAULT_ROLE` is then unnecessary:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e VAULT_ADDR="https://<vault-host>:8200" \
+  -e VAULT_TOKEN="<vault-token>" \
+  -v /path/to/config.yaml:/etc/ssh-sign/config.yaml:ro \
+  ssh-sign:<git-hash>
+```
+
 If Vault requires a client certificate, also mount the **Vault client** certs (not this service's server certs):
 
 ```bash
@@ -229,7 +254,7 @@ The container exits with a missing-item list if required environment variables a
 
 ## Kubernetes
 
-Manifests are in `kubernetes/`, deployed with kustomize. Edit Vault address, token, and role in `kubernetes/secret.yaml`, then set the image tag to the git hash you just built:
+Manifests are in `kubernetes/`, deployed with kustomize. Edit the Vault address and token in `kubernetes/secret.yaml`, configure `vault.roles` in `kubernetes/configmap.yaml`, then set the image tag to the git hash you just built:
 
 ```bash
 make docker
@@ -246,8 +271,8 @@ kubectl apply -k .
 This creates:
 
 - Namespace `ssh-sign`
-- ConfigMap: `/etc/ssh-sign/config.yaml` in the container
-- Secret `ssh-sign-vault`: `VAULT_ADDR` / `VAULT_TOKEN` / `VAULT_ROLE` and related vars
+- ConfigMap: `/etc/ssh-sign/config.yaml` in the container, including `vault.roles`
+- Secret `ssh-sign-vault`: `VAULT_ADDR` / `VAULT_TOKEN` and related vars; `VAULT_ROLE` is only a single-role fallback
 - Deployment + Service (ClusterIP `:8080`)
 
 `kubernetes/mtls-patch.yaml` and Secret `ssh-sign-vault-mtls` are only for **this service calling Vault** (client certs). They do not enable HTTPS/mTLS on this service's `:8080`. `server.tls` in the ConfigMap is empty by default.
@@ -287,7 +312,7 @@ curl http://127.0.0.1:8080/api/health
 
 ## UI
 
-Open the page, paste a public key. A successful sign returns the certificate and expiry.
+Open the page, choose a signing role, then paste a public key. A successful sign returns the certificate and serial number.
 
 Landing page:
 
@@ -342,18 +367,19 @@ ssh -i ~/.ssh/id_ed25519 \
 
 ## API
 
-`GET /api/health`  
-`GET /api/info` — default login user  
-`POST /api/sign`
+- `GET /api/health`
+- `GET /api/info` — default login user and available roles (with descriptions and per-role defaults)
+- `POST /api/sign`
 
 ```json
 {
   "public_key": "ssh-ed25519 AAAA...",
-  "valid_principals": "<login-user>"
+  "valid_principals": "<login-user>",
+  "role": "<role>"
 }
 ```
 
-Certificate TTL is decided by the Vault role. Do not send TTL in the request.
+`role` matches `vault.roles[].role` in `config.yaml`; it may be omitted when only one role is configured. Certificate TTL is decided by the Vault role. Do not send TTL in the request.
 
 ## License
 

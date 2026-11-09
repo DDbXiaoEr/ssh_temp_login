@@ -10,6 +10,36 @@
     <form class="kiosk" aria-labelledby="request-title" @submit.prevent="sign">
       <h2 id="request-title" class="sr">申请证书</h2>
 
+      <fieldset v-if="info.roles.length" class="role-field">
+        <legend>签发类型</legend>
+        <div class="roles">
+          <label
+            v-for="role in info.roles"
+            :key="role.name"
+            class="role"
+            :class="{ selected: roleName === role.name }"
+          >
+            <input
+              v-model="roleName"
+              type="radio"
+              name="role"
+              :value="role.name"
+              @change="selectRole(role)"
+            />
+            <span class="role-check" aria-hidden="true" />
+            <span class="role-copy">
+              <span class="role-name">{{ role.name }}</span>
+              <span class="role-desc">
+                {{ role.description || '使用该角色签发短期登录证书。' }}
+              </span>
+              <span v-if="role.default_principals" class="role-user">
+                默认用户 {{ role.default_principals }}
+              </span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
       <div class="field key">
         <div class="field-head">
           <label for="pubkey">OpenSSH 公钥</label>
@@ -47,7 +77,10 @@
       <div class="pass-face">
         <div class="pass-meta">
           <h2 id="pass-title">{{ result.principals || '—' }}</h2>
-          <p>序列 {{ result.serial_number || '—' }}</p>
+          <p>
+            序列 {{ result.serial_number || '—' }}
+            <span v-if="result.role" class="pass-role">{{ result.role }}</span>
+          </p>
         </div>
         <pre>{{ result.signed_key }}</pre>
         <div class="pass-actions">
@@ -103,10 +136,12 @@ import { onMounted, reactive, ref } from 'vue'
 
 const info = reactive({
   default_principals: '',
+  roles: [],
 })
 
 const publicKey = ref('')
 const principals = ref('')
+const roleName = ref('')
 const busy = ref(false)
 const error = ref('')
 const result = ref(null)
@@ -118,11 +153,22 @@ onMounted(async () => {
     if (!res.ok) return
     const data = await res.json()
     Object.assign(info, data)
-    if (!principals.value) principals.value = data.default_principals || 'root'
+    if (!Array.isArray(info.roles)) info.roles = []
+    if (!roleName.value && info.roles.length) roleName.value = info.roles[0].name
+    if (!principals.value) principals.value = defaultPrincipals(roleName.value)
   } catch {
     /* 后端未启动时仍可编辑表单 */
   }
 })
+
+function defaultPrincipals(name) {
+  const role = info.roles.find((item) => item.name === name)
+  return (role && role.default_principals) || info.default_principals || ''
+}
+
+function selectRole(role) {
+  principals.value = role.default_principals || info.default_principals || ''
+}
 
 async function loadKeyFile(event) {
   const input = event.target
@@ -154,6 +200,7 @@ async function sign() {
       body: JSON.stringify({
         public_key: publicKey.value,
         valid_principals: principals.value,
+        role: roleName.value,
       }),
     })
     const data = await res.json()
@@ -230,6 +277,127 @@ input {
   margin-top: 40px;
   padding: 28px 0 8px;
   border-top: 8px solid var(--enamel);
+}
+
+.role-field {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.role-field legend {
+  padding: 0;
+  margin-bottom: 10px;
+  color: var(--mute);
+  font-size: 0.92rem;
+}
+
+.roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.role {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px 14px;
+  background: var(--badge);
+  border: 1px solid rgba(24, 33, 28, 0.18);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.role:hover {
+  border-color: var(--enamel);
+}
+
+.role.selected {
+  background: #fff;
+  border-color: var(--enamel);
+  box-shadow: inset 0 0 0 1px var(--enamel);
+}
+
+.role:focus-within {
+  outline: 3px solid var(--enamel);
+  outline-offset: 2px;
+}
+
+.role input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+
+.role input:focus,
+.role input:focus-visible {
+  outline: none;
+}
+
+.role-check {
+  position: relative;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 3px;
+  border: 1px solid var(--mute);
+  background: transparent;
+}
+
+.role.selected .role-check {
+  border-color: var(--enamel);
+}
+
+.role.selected .role-check::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  background: var(--enamel);
+}
+
+.role-copy {
+  display: block;
+  min-width: 0;
+}
+
+.role-name {
+  display: block;
+  color: var(--ink);
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.role.selected .role-name {
+  color: var(--enamel-deep);
+}
+
+.role-desc {
+  display: block;
+  margin-top: 3px;
+  color: var(--mute);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.role-user {
+  display: inline-block;
+  margin-top: 7px;
+  padding: 1px 5px;
+  background: rgba(24, 74, 140, 0.08);
+  color: var(--enamel-deep);
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
 }
 
 .sr {
@@ -384,6 +552,16 @@ button:focus-visible {
   color: var(--mute);
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.84rem;
+}
+
+.pass-role {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--enamel);
+  color: var(--enamel-deep);
+  font-size: 0.72rem;
+  font-weight: 500;
 }
 
 pre {

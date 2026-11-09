@@ -408,6 +408,82 @@
         color: var(--mute);
       }
 
+      .role-fields {
+        margin-top: 16px;
+        padding-left: 14px;
+        border-left: 2px solid var(--enamel);
+      }
+
+      .role-fields[hidden] {
+        display: none;
+      }
+
+      .role-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .role-item {
+        border: 1px solid var(--rule);
+        background: #e8ece2;
+      }
+
+      .role-item-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 7px 8px 7px 12px;
+        border-bottom: 1px dashed var(--rule);
+      }
+
+      .role-item-no {
+        font-family: var(--mono);
+        font-size: 0.68rem;
+        color: var(--mute);
+      }
+
+      .role-remove {
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--mute);
+        font-size: 1rem;
+        line-height: 1;
+      }
+
+      .role-remove:hover {
+        color: var(--fault);
+      }
+
+      .role-item-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 10px;
+        padding: 12px;
+      }
+
+      .role-item-grid .field:nth-child(1) {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      .role-item-grid .field:nth-child(2) {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+
+      .role-item-grid .field:nth-child(3) {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
+      .role-item-grid .field + .field {
+        margin-top: 0;
+      }
+
       .switch {
         display: flex;
         align-items: flex-start;
@@ -807,6 +883,19 @@
         }
       }
 
+      @media (max-width: 700px) {
+        .role-item-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .role-item-grid .field:nth-child(1),
+        .role-item-grid .field:nth-child(2),
+        .role-item-grid .field:nth-child(3) {
+          grid-column: 1;
+          grid-row: auto;
+        }
+      }
+
       @media (max-width: 560px) {
         .page {
           padding: 0 16px 40px;
@@ -884,8 +973,8 @@
               <span class="title-cn">配置打样</span>
             </h1>
             <p class="lede">
-              为临时 SSH 登录证书服务生成 <code>backend/config.yaml</code>。填好监听、允许来源、
-              TLS 与 Vault 客户端证书，配置即时成稿。
+              为临时 SSH 登录证书服务生成 <code>backend/config.yaml</code>。填好监听、允许来源、TLS、
+              签发角色与 Vault 客户端证书，配置即时成稿。
             </p>
           </div>
         </div>
@@ -999,10 +1088,35 @@
           <section class="step" aria-labelledby="step-4">
             <div class="step-head">
               <span class="step-no" aria-hidden="true">04</span>
-              <h2 class="step-title" id="step-4">Vault 客户端证书</h2>
+              <h2 class="step-title" id="step-4">签发角色</h2>
             </div>
             <p class="step-hint">
-              只有 Vault 开启 mTLS 时才需要。地址、token、role 仍从环境变量读取。
+              在 YAML 中声明角色后，前端会展示描述供选择；关闭时仍使用 <code>VAULT_ROLE</code> 单角色。
+            </p>
+
+            <label class="switch">
+              <input type="checkbox" id="roles-enabled" />
+              <span class="switch-text">
+                <strong>在 YAML 中配置多角色</strong>
+                <span>生成 vault.roles；角色名对应 Vault SSH role。</span>
+              </span>
+            </label>
+
+            <div class="role-fields" id="role-fields" hidden>
+              <div class="role-list" id="role-list"></div>
+              <button class="add-origin" id="add-role" type="button">
+                <span aria-hidden="true">+</span> 添加角色
+              </button>
+            </div>
+          </section>
+
+          <section class="step" aria-labelledby="step-5">
+            <div class="step-head">
+              <span class="step-no" aria-hidden="true">05</span>
+              <h2 class="step-title" id="step-5">Vault 客户端证书</h2>
+            </div>
+            <p class="step-hint">
+              只有 Vault 开启 mTLS 时才需要。地址、token 等连接信息仍从环境变量读取。
             </p>
 
             <label class="switch">
@@ -1063,15 +1177,15 @@
           <aside class="vault-note" aria-labelledby="vault-title">
             <h3 id="vault-title">Vault 地址与凭据仍走环境变量</h3>
             <p>
-              <code>VAULT_ADDR</code> / <code>VAULT_TOKEN</code> / <code>VAULT_ROLE</code>
-              从环境变量读取；上面的证书路径也可以用同名环境变量覆盖。
+              地址、token 等连接信息从环境变量读取；角色可以写进上面的 YAML，证书路径也可以用同名环境变量覆盖。
+              缺少必填项会在启动时列出并退出。
             </p>
             <div class="env-chips" aria-label="Vault 环境变量">
               <code>VAULT_ADDR</code>
               <code>VAULT_TOKEN</code>
-              <code>VAULT_ROLE</code>
               <code>VAULT_MOUNT</code>
               <code>VAULT_DEFAULT_PRINCIPALS</code>
+              <code>VAULT_ROLE</code>
               <code>VAULT_MTLS</code>
               <code>VAULT_CACERT</code>
               <code>VAULT_CLIENT_CERT</code>
@@ -1122,6 +1236,8 @@
           key: '',
           ca: '',
           requireClientCert: false,
+          rolesEnabled: false,
+          roles: [],
           vaultMtls: false,
           vaultCa: '',
           vaultClientCert: '',
@@ -1140,6 +1256,10 @@
           key: document.getElementById('key'),
           ca: document.getElementById('ca'),
           requireClientCert: document.getElementById('require-client-cert'),
+          rolesEnabled: document.getElementById('roles-enabled'),
+          roleFields: document.getElementById('role-fields'),
+          roleList: document.getElementById('role-list'),
+          addRole: document.getElementById('add-role'),
           vaultMtls: document.getElementById('vault-mtls'),
           vaultFields: document.getElementById('vault-fields'),
           vaultCa: document.getElementById('vault-ca'),
@@ -1156,7 +1276,13 @@
           errors: document.getElementById('errors'),
         };
 
-        const cloneDefaults = () => ({ ...DEFAULTS, origins: [...DEFAULTS.origins] });
+        const emptyRole = () => ({ role: '', description: '', defaultPrincipals: '' });
+
+        const cloneDefaults = () => ({
+          ...DEFAULTS,
+          origins: [...DEFAULTS.origins],
+          roles: DEFAULTS.roles.map((role) => ({ ...role })),
+        });
 
         function loadState() {
           try {
@@ -1174,6 +1300,17 @@
               key: typeof saved.key === 'string' ? saved.key : '',
               ca: typeof saved.ca === 'string' ? saved.ca : '',
               requireClientCert: Boolean(saved.requireClientCert),
+              rolesEnabled: Boolean(saved.rolesEnabled),
+              roles: Array.isArray(saved.roles)
+                ? saved.roles
+                    .filter((role) => role && typeof role === 'object')
+                    .map((role) => ({
+                      role: typeof role.role === 'string' ? role.role : '',
+                      description: typeof role.description === 'string' ? role.description : '',
+                      defaultPrincipals:
+                        typeof role.defaultPrincipals === 'string' ? role.defaultPrincipals : '',
+                    }))
+                : [],
               vaultMtls: Boolean(saved.vaultMtls),
               vaultCa: typeof saved.vaultCa === 'string' ? saved.vaultCa : '',
               vaultClientCert:
@@ -1252,12 +1389,117 @@
           });
         }
 
+        function renderRoles(focusIndex, focusField = 'role') {
+          els.roleList.replaceChildren();
+
+          if (state.roles.length === 0) {
+            const empty = document.createElement('p');
+            empty.className = 'empty';
+            empty.textContent = '还没有角色，至少添加一个后才能生成 vault.roles。';
+            els.roleList.append(empty);
+          }
+
+          state.roles.forEach((role, index) => {
+            const item = document.createElement('div');
+            item.className = 'role-item';
+
+            const head = document.createElement('div');
+            head.className = 'role-item-head';
+
+            const no = document.createElement('span');
+            no.className = 'role-item-no';
+            no.textContent = `角色 ${String(index + 1).padStart(2, '0')}`;
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'role-remove';
+            remove.innerHTML = '&times;';
+            remove.title = '移除这个角色';
+            remove.setAttribute('aria-label', `移除角色 ${index + 1}`);
+            remove.addEventListener('click', () => {
+              state.roles.splice(index, 1);
+              renderRoles();
+              update();
+            });
+
+            head.append(no, remove);
+
+            const grid = document.createElement('div');
+            grid.className = 'role-item-grid';
+
+            const fields = [
+              {
+                key: 'role',
+                label: '角色名',
+                code: 'vault.roles[].role',
+                placeholder: 'user-cert',
+              },
+              {
+                key: 'description',
+                label: '描述',
+                code: 'vault.roles[].description',
+                placeholder: '日常登录：允许 root，10 分钟有效',
+              },
+              {
+                key: 'defaultPrincipals',
+                label: '默认用户',
+                code: 'default_principals',
+                placeholder: 'root',
+              },
+            ];
+
+            fields.forEach(({ key, label, code, placeholder }) => {
+              const field = document.createElement('label');
+              field.className = 'field';
+
+              const text = document.createElement('span');
+              text.className = 'field-label';
+              text.textContent = label + ' ';
+              const codeEl = document.createElement('code');
+              codeEl.textContent = code;
+              text.append(codeEl);
+
+              const input = document.createElement('input');
+              input.className = 'input';
+              input.type = 'text';
+              input.spellcheck = false;
+              input.autocomplete = 'off';
+              input.value = role[key];
+              input.placeholder = placeholder;
+              input.dataset.roleIndex = String(index);
+              input.dataset.roleField = key;
+              input.setAttribute('aria-label', `角色 ${index + 1} ${label}`);
+              input.addEventListener('input', () => {
+                state.roles[index][key] = input.value;
+                update();
+              });
+
+              field.append(text, input);
+              grid.append(field);
+            });
+
+            item.append(head, grid);
+            els.roleList.append(item);
+
+            if (focusIndex === index) {
+              requestAnimationFrame(() => {
+                const target = grid.querySelector(`[data-role-field="${focusField}"]`);
+                if (target) target.focus();
+              });
+            }
+          });
+        }
+
         function syncTlsVisibility() {
           els.tlsFields.hidden = !state.tlsEnabled;
         }
 
         function syncVaultVisibility() {
           els.vaultFields.hidden = !state.vaultMtls;
+        }
+
+        function syncRolesVisibility() {
+          els.roleFields.hidden = !state.rolesEnabled;
         }
 
         function quoted(value) {
@@ -1283,13 +1525,29 @@
             lines.push(`    require_client_cert: ${state.requireClientCert ? 'true' : 'false'}`);
           }
 
+          const vaultLines = [];
+          if (state.rolesEnabled) {
+            vaultLines.push('  roles:');
+            state.roles.forEach((role) => {
+              vaultLines.push(`    - role: ${quoted(role.role.trim())}`);
+              vaultLines.push(`      description: ${quoted(role.description.trim())}`);
+              if (role.defaultPrincipals.trim()) {
+                vaultLines.push(`      default_principals: ${quoted(role.defaultPrincipals.trim())}`);
+              }
+            });
+          }
+
           if (state.vaultMtls) {
+            vaultLines.push('  mtls: true');
+            vaultLines.push(`  ca_cert: ${quoted(state.vaultCa.trim())}`);
+            vaultLines.push(`  client_cert: ${quoted(state.vaultClientCert.trim())}`);
+            vaultLines.push(`  client_key: ${quoted(state.vaultClientKey.trim())}`);
+            vaultLines.push(`  tls_skip_verify: ${state.vaultSkipVerify ? 'true' : 'false'}`);
+          }
+
+          if (vaultLines.length > 0) {
             lines.push('vault:');
-            lines.push('  mtls: true');
-            lines.push(`  ca_cert: ${quoted(state.vaultCa.trim())}`);
-            lines.push(`  client_cert: ${quoted(state.vaultClientCert.trim())}`);
-            lines.push(`  client_key: ${quoted(state.vaultClientKey.trim())}`);
-            lines.push(`  tls_skip_verify: ${state.vaultSkipVerify ? 'true' : 'false'}`);
+            lines.push(...vaultLines);
           }
 
           return lines.join('\n') + '\n';
@@ -1326,6 +1584,29 @@
                 message: '要求客户端证书时必须填写 server.tls.client_ca_file。',
               });
             }
+          }
+
+          if (state.rolesEnabled) {
+            if (state.roles.length === 0) {
+              errors.push({ field: 'roles', message: '开启多角色后至少添加一个角色。' });
+            }
+
+            const seen = new Set();
+            state.roles.forEach((role, index) => {
+              const name = role.role.trim();
+              if (!name) {
+                errors.push({
+                  field: 'roles',
+                  message: `第 ${index + 1} 个角色缺少 Vault role 名称。`,
+                });
+                return;
+              }
+              if (seen.has(name)) {
+                errors.push({ field: 'roles', message: `角色名 ${name} 重复。` });
+                return;
+              }
+              seen.add(name);
+            });
           }
 
           if (state.vaultMtls) {
@@ -1379,6 +1660,11 @@
             return `${match[1]}<span class="tok-key">${match[2]}</span>:${decorateValue(match[3])}`;
           }
 
+          match = escaped.match(/^(\s*)- ([A-Za-z_][\w-]*):(.*)$/);
+          if (match) {
+            return `${match[1]}- <span class="tok-key">${match[2]}</span>:${decorateValue(match[3])}`;
+          }
+
           match = escaped.match(/^(\s*)- (.*)$/);
           if (match) {
             return `${match[1]}- ${decorateValue(match[2])}`;
@@ -1419,9 +1705,13 @@
         }
 
         function renderStatus(errors, blocked) {
+          const roleNote = state.rolesEnabled
+            ? ` 已生成 ${state.roles.length} 个签发角色。`
+            : ' 未在 YAML 中配置角色，仍使用 VAULT_ROLE。';
+
           let tone = 'plain';
           let label = '明文 HTTP';
-          let detail = `服务将在 ${state.addr.trim()} 上监听，不带 TLS。`;
+          let detail = `服务将在 ${state.addr.trim()} 上监听，不带 TLS。${roleNote}`;
 
           if (blocked) {
             tone = 'fault';
@@ -1430,11 +1720,11 @@
           } else if (state.tlsEnabled && state.requireClientCert) {
             tone = 'mtls';
             label = 'mTLS 已启用';
-            detail = '连接方必须出示由该客户端 CA 签发的证书。';
+            detail = `连接方必须出示由该客户端 CA 签发的证书。${roleNote}`;
           } else if (state.tlsEnabled) {
             tone = 'https';
             label = 'HTTPS 已启用';
-            detail = '已加载服务端证书与私钥，连接方无需出示证书。';
+            detail = `已加载服务端证书与私钥，连接方无需出示证书。${roleNote}`;
           }
 
           if (!blocked && state.vaultMtls) {
@@ -1476,6 +1766,24 @@
           els.origins.querySelectorAll('input').forEach((input) => {
             const value = input.value.trim();
             if (value && !/^https?:\/\/\S+$/i.test(value)) {
+              input.setAttribute('aria-invalid', 'true');
+            } else {
+              input.removeAttribute('aria-invalid');
+            }
+          });
+
+          const roleCounts = new Map();
+          state.roles.forEach((role) => {
+            const name = role.role.trim();
+            if (name) roleCounts.set(name, (roleCounts.get(name) || 0) + 1);
+          });
+
+          els.roleList.querySelectorAll('[data-role-field="role"]').forEach((input) => {
+            const index = Number(input.dataset.roleIndex);
+            const role = state.roles[index];
+            const name = role ? role.role.trim() : '';
+            const bad = state.rolesEnabled && (!name || roleCounts.get(name) > 1);
+            if (bad) {
               input.setAttribute('aria-invalid', 'true');
             } else {
               input.removeAttribute('aria-invalid');
@@ -1583,6 +1891,23 @@
           update();
         });
 
+        els.rolesEnabled.addEventListener('change', () => {
+          const enabled = els.rolesEnabled.checked;
+          state.rolesEnabled = enabled;
+          if (enabled && state.roles.length === 0) {
+            state.roles.push(emptyRole());
+          }
+          syncRolesVisibility();
+          renderRoles(enabled ? state.roles.length - 1 : undefined);
+          update();
+        });
+
+        els.addRole.addEventListener('click', () => {
+          state.roles.push(emptyRole());
+          renderRoles(state.roles.length - 1);
+          update();
+        });
+
         els.addOrigin.addEventListener('click', () => {
           state.origins.push('');
           renderOrigins(state.origins.length - 1);
@@ -1597,14 +1922,17 @@
           els.ca.value = state.ca;
           els.tlsEnabled.checked = state.tlsEnabled;
           els.requireClientCert.checked = state.requireClientCert;
+          els.rolesEnabled.checked = state.rolesEnabled;
           els.vaultMtls.checked = state.vaultMtls;
           els.vaultCa.value = state.vaultCa;
           els.vaultClientCert.value = state.vaultClientCert;
           els.vaultClientKey.value = state.vaultClientKey;
           els.vaultSkipVerify.checked = state.vaultSkipVerify;
           renderOrigins();
+          renderRoles();
           syncTlsVisibility();
           syncVaultVisibility();
+          syncRolesVisibility();
           update();
           els.addr.focus();
         });
@@ -1650,6 +1978,12 @@
         els.ca.value = state.ca;
         els.tlsEnabled.checked = state.tlsEnabled;
         els.requireClientCert.checked = state.requireClientCert;
+        els.rolesEnabled.checked = state.rolesEnabled;
+
+        if (state.rolesEnabled && state.roles.length === 0) {
+          state.roles.push(emptyRole());
+        }
+
         els.vaultMtls.checked = state.vaultMtls;
         els.vaultCa.value = state.vaultCa;
         els.vaultClientCert.value = state.vaultClientCert;
@@ -1657,8 +1991,10 @@
         els.vaultSkipVerify.checked = state.vaultSkipVerify;
 
         renderOrigins();
+        renderRoles();
         syncTlsVisibility();
         syncVaultVisibility();
+        syncRolesVisibility();
         update();
       })();
     </script>

@@ -28,16 +28,22 @@ type TLSConfig struct {
 }
 
 type VaultConfig struct {
-	Address           string `yaml:"address"`
-	Token             string `yaml:"token"`
-	Namespace         string `yaml:"namespace"`
-	Mount             string `yaml:"mount"`
+	Address           string      `yaml:"address"`
+	Token             string      `yaml:"token"`
+	Namespace         string      `yaml:"namespace"`
+	Mount             string      `yaml:"mount"`
+	Roles             []VaultRole `yaml:"roles"`
+	TLSSkipVerify     bool        `yaml:"tls_skip_verify"`
+	MTLS              bool        `yaml:"mtls"`
+	CACert            string      `yaml:"ca_cert"`
+	ClientCert        string      `yaml:"client_cert"`
+	ClientKey         string      `yaml:"client_key"`
+	DefaultPrincipals string      `yaml:"default_principals"`
+}
+
+type VaultRole struct {
 	Role              string `yaml:"role"`
-	TLSSkipVerify     bool   `yaml:"tls_skip_verify"`
-	MTLS              bool   `yaml:"mtls"`
-	CACert            string `yaml:"ca_cert"`
-	ClientCert        string `yaml:"client_cert"`
-	ClientKey         string `yaml:"client_key"`
+	Description       string `yaml:"description"`
 	DefaultPrincipals string `yaml:"default_principals"`
 }
 
@@ -76,7 +82,18 @@ func applyVaultFromEnv(cfg *Config) error {
 
 	cfg.Vault.Address = requireEnv("VAULT_ADDR", &missing)
 	cfg.Vault.Token = requireEnv("VAULT_TOKEN", &missing)
-	cfg.Vault.Role = requireEnv("VAULT_ROLE", &missing)
+
+	roles := cfg.Vault.Roles
+	if len(roles) == 0 {
+		role := requireEnv("VAULT_ROLE", &missing)
+		if role != "" {
+			roles = []VaultRole{{
+				Role:        role,
+				Description: "通过 VAULT_ROLE 环境变量配置",
+			}}
+		}
+	}
+	cfg.Vault.Roles = roles
 
 	if v := strings.TrimSpace(os.Getenv("VAULT_MOUNT")); v != "" {
 		cfg.Vault.Mount = v
@@ -111,9 +128,17 @@ func applyVaultFromEnv(cfg *Config) error {
 	return nil
 }
 
-// validate 检查连接 Vault 的客户端证书。配置了 mtls、或填写了任意证书路径时，
-// ca_cert、client_cert、client_key 三份文件都必须存在。
+// validate 检查 Vault role 与连接 Vault 的客户端证书。
 func (v VaultConfig) validate() error {
+	if err := validateRoles(v.Roles); err != nil {
+		return err
+	}
+	return v.validateTLS()
+}
+
+// validateTLS 检查连接 Vault 的客户端证书。配置了 mtls、或填写了任意证书路径时，
+// ca_cert、client_cert、client_key 三份文件都必须存在。
+func (v VaultConfig) validateTLS() error {
 	certs := []struct {
 		name string
 		path string
@@ -148,6 +173,28 @@ func (v VaultConfig) validate() error {
 		if _, err := os.Stat(cert.path); err != nil {
 			return fmt.Errorf("%s: %w", cert.name, err)
 		}
+	}
+	return nil
+}
+
+func validateRoles(roles []VaultRole) error {
+	if len(roles) == 0 {
+		return fmt.Errorf("vault.roles must contain at least one role, or set VAULT_ROLE")
+	}
+
+	seen := make(map[string]struct{}, len(roles))
+	for i := range roles {
+		roles[i].Role = strings.TrimSpace(roles[i].Role)
+		roles[i].Description = strings.TrimSpace(roles[i].Description)
+		roles[i].DefaultPrincipals = strings.TrimSpace(roles[i].DefaultPrincipals)
+
+		if roles[i].Role == "" {
+			return fmt.Errorf("vault.roles[%d].role is required", i)
+		}
+		if _, ok := seen[roles[i].Role]; ok {
+			return fmt.Errorf("vault.roles contains duplicate role %q", roles[i].Role)
+		}
+		seen[roles[i].Role] = struct{}{}
 	}
 	return nil
 }
