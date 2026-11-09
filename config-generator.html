@@ -884,8 +884,8 @@
               <span class="title-cn">配置打样</span>
             </h1>
             <p class="lede">
-              为临时 SSH 登录证书服务生成 <code>backend/config.yaml</code>。填好监听、允许来源与
-              TLS，配置即时成稿。
+              为临时 SSH 登录证书服务生成 <code>backend/config.yaml</code>。填好监听、允许来源、
+              TLS 与 Vault 客户端证书，配置即时成稿。
             </p>
           </div>
         </div>
@@ -996,15 +996,86 @@
             </div>
           </section>
 
+          <section class="step" aria-labelledby="step-4">
+            <div class="step-head">
+              <span class="step-no" aria-hidden="true">04</span>
+              <h2 class="step-title" id="step-4">Vault 客户端证书</h2>
+            </div>
+            <p class="step-hint">
+              只有 Vault 开启 mTLS 时才需要。地址、token、role 仍从环境变量读取。
+            </p>
+
+            <label class="switch">
+              <input type="checkbox" id="vault-mtls" />
+              <span class="switch-text">
+                <strong>Vault 已开启 mTLS</strong>
+                <span>连接 Vault 时出示客户端证书，并用指定 CA 校验 Vault 服务端证书。</span>
+              </span>
+            </label>
+
+            <div class="tls-fields" id="vault-fields" hidden>
+              <label class="field">
+                <span class="field-label">Vault CA <code>vault.ca_cert</code></span>
+                <input
+                  class="input"
+                  id="vault-ca"
+                  type="text"
+                  spellcheck="false"
+                  autocomplete="off"
+                  placeholder="/certs/vault/ca.crt"
+                />
+              </label>
+
+              <label class="field">
+                <span class="field-label">客户端证书 <code>vault.client_cert</code></span>
+                <input
+                  class="input"
+                  id="vault-client-cert"
+                  type="text"
+                  spellcheck="false"
+                  autocomplete="off"
+                  placeholder="/certs/vault/client.crt"
+                />
+              </label>
+
+              <label class="field">
+                <span class="field-label">客户端私钥 <code>vault.client_key</code></span>
+                <input
+                  class="input"
+                  id="vault-client-key"
+                  type="text"
+                  spellcheck="false"
+                  autocomplete="off"
+                  placeholder="/certs/vault/client.key"
+                />
+              </label>
+
+              <label class="switch minor">
+                <input type="checkbox" id="vault-skip-verify" />
+                <span class="switch-text">
+                  <strong>跳过 Vault 证书校验</strong>
+                  <span>对应 <code>vault.tls_skip_verify</code>，仅建议在测试环境使用。</span>
+                </span>
+              </label>
+            </div>
+          </section>
+
           <aside class="vault-note" aria-labelledby="vault-title">
-            <h3 id="vault-title">Vault 连接不写在这里</h3>
-            <p>启动时从环境变量读取；缺少必填项会列出清单并退出。</p>
+            <h3 id="vault-title">Vault 地址与凭据仍走环境变量</h3>
+            <p>
+              <code>VAULT_ADDR</code> / <code>VAULT_TOKEN</code> / <code>VAULT_ROLE</code>
+              从环境变量读取；上面的证书路径也可以用同名环境变量覆盖。
+            </p>
             <div class="env-chips" aria-label="Vault 环境变量">
               <code>VAULT_ADDR</code>
               <code>VAULT_TOKEN</code>
               <code>VAULT_ROLE</code>
               <code>VAULT_MOUNT</code>
               <code>VAULT_DEFAULT_PRINCIPALS</code>
+              <code>VAULT_MTLS</code>
+              <code>VAULT_CACERT</code>
+              <code>VAULT_CLIENT_CERT</code>
+              <code>VAULT_CLIENT_KEY</code>
             </div>
           </aside>
         </form>
@@ -1051,6 +1122,11 @@
           key: '',
           ca: '',
           requireClientCert: false,
+          vaultMtls: false,
+          vaultCa: '',
+          vaultClientCert: '',
+          vaultClientKey: '',
+          vaultSkipVerify: false,
         };
 
         const els = {
@@ -1064,6 +1140,12 @@
           key: document.getElementById('key'),
           ca: document.getElementById('ca'),
           requireClientCert: document.getElementById('require-client-cert'),
+          vaultMtls: document.getElementById('vault-mtls'),
+          vaultFields: document.getElementById('vault-fields'),
+          vaultCa: document.getElementById('vault-ca'),
+          vaultClientCert: document.getElementById('vault-client-cert'),
+          vaultClientKey: document.getElementById('vault-client-key'),
+          vaultSkipVerify: document.getElementById('vault-skip-verify'),
           reset: document.getElementById('reset'),
           code: document.getElementById('code'),
           copy: document.getElementById('copy'),
@@ -1092,6 +1174,13 @@
               key: typeof saved.key === 'string' ? saved.key : '',
               ca: typeof saved.ca === 'string' ? saved.ca : '',
               requireClientCert: Boolean(saved.requireClientCert),
+              vaultMtls: Boolean(saved.vaultMtls),
+              vaultCa: typeof saved.vaultCa === 'string' ? saved.vaultCa : '',
+              vaultClientCert:
+                typeof saved.vaultClientCert === 'string' ? saved.vaultClientCert : '',
+              vaultClientKey:
+                typeof saved.vaultClientKey === 'string' ? saved.vaultClientKey : '',
+              vaultSkipVerify: Boolean(saved.vaultSkipVerify),
             };
           } catch {
             return cloneDefaults();
@@ -1167,6 +1256,10 @@
           els.tlsFields.hidden = !state.tlsEnabled;
         }
 
+        function syncVaultVisibility() {
+          els.vaultFields.hidden = !state.vaultMtls;
+        }
+
         function quoted(value) {
           return '"' + value.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
         }
@@ -1188,6 +1281,15 @@
             lines.push(`    key_file: ${quoted(state.key.trim())}`);
             lines.push(`    client_ca_file: ${quoted(state.ca.trim())}`);
             lines.push(`    require_client_cert: ${state.requireClientCert ? 'true' : 'false'}`);
+          }
+
+          if (state.vaultMtls) {
+            lines.push('vault:');
+            lines.push('  mtls: true');
+            lines.push(`  ca_cert: ${quoted(state.vaultCa.trim())}`);
+            lines.push(`  client_cert: ${quoted(state.vaultClientCert.trim())}`);
+            lines.push(`  client_key: ${quoted(state.vaultClientKey.trim())}`);
+            lines.push(`  tls_skip_verify: ${state.vaultSkipVerify ? 'true' : 'false'}`);
           }
 
           return lines.join('\n') + '\n';
@@ -1222,6 +1324,24 @@
               errors.push({
                 field: 'ca',
                 message: '要求客户端证书时必须填写 server.tls.client_ca_file。',
+              });
+            }
+          }
+
+          if (state.vaultMtls) {
+            if (!state.vaultCa.trim()) {
+              errors.push({ field: 'vaultCa', message: 'Vault 开启 mTLS 后必须填写 vault.ca_cert。' });
+            }
+            if (!state.vaultClientCert.trim()) {
+              errors.push({
+                field: 'vaultClientCert',
+                message: 'Vault 开启 mTLS 后必须填写 vault.client_cert。',
+              });
+            }
+            if (!state.vaultClientKey.trim()) {
+              errors.push({
+                field: 'vaultClientKey',
+                message: 'Vault 开启 mTLS 后必须填写 vault.client_key。',
               });
             }
           }
@@ -1317,6 +1437,10 @@
             detail = '已加载服务端证书与私钥，连接方无需出示证书。';
           }
 
+          if (!blocked && state.vaultMtls) {
+            detail += ' 连接 Vault 时会出示客户端证书。';
+          }
+
           els.status.dataset.tone = tone;
           els.statusLabel.textContent = label;
           els.statusDetail.textContent = detail;
@@ -1336,6 +1460,9 @@
             cert: els.cert,
             key: els.key,
             ca: els.ca,
+            vaultCa: els.vaultCa,
+            vaultClientCert: els.vaultClientCert,
+            vaultClientKey: els.vaultClientKey,
           };
 
           Object.entries(map).forEach(([name, element]) => {
@@ -1419,6 +1546,32 @@
           update();
         });
 
+        els.vaultCa.addEventListener('input', () => {
+          state.vaultCa = els.vaultCa.value;
+          update();
+        });
+
+        els.vaultClientCert.addEventListener('input', () => {
+          state.vaultClientCert = els.vaultClientCert.value;
+          update();
+        });
+
+        els.vaultClientKey.addEventListener('input', () => {
+          state.vaultClientKey = els.vaultClientKey.value;
+          update();
+        });
+
+        els.vaultMtls.addEventListener('change', () => {
+          state.vaultMtls = els.vaultMtls.checked;
+          syncVaultVisibility();
+          update();
+        });
+
+        els.vaultSkipVerify.addEventListener('change', () => {
+          state.vaultSkipVerify = els.vaultSkipVerify.checked;
+          update();
+        });
+
         els.tlsEnabled.addEventListener('change', () => {
           state.tlsEnabled = els.tlsEnabled.checked;
           syncTlsVisibility();
@@ -1444,8 +1597,14 @@
           els.ca.value = state.ca;
           els.tlsEnabled.checked = state.tlsEnabled;
           els.requireClientCert.checked = state.requireClientCert;
+          els.vaultMtls.checked = state.vaultMtls;
+          els.vaultCa.value = state.vaultCa;
+          els.vaultClientCert.value = state.vaultClientCert;
+          els.vaultClientKey.value = state.vaultClientKey;
+          els.vaultSkipVerify.checked = state.vaultSkipVerify;
           renderOrigins();
           syncTlsVisibility();
+          syncVaultVisibility();
           update();
           els.addr.focus();
         });
@@ -1491,9 +1650,15 @@
         els.ca.value = state.ca;
         els.tlsEnabled.checked = state.tlsEnabled;
         els.requireClientCert.checked = state.requireClientCert;
+        els.vaultMtls.checked = state.vaultMtls;
+        els.vaultCa.value = state.vaultCa;
+        els.vaultClientCert.value = state.vaultClientCert;
+        els.vaultClientKey.value = state.vaultClientKey;
+        els.vaultSkipVerify.checked = state.vaultSkipVerify;
 
         renderOrigins();
         syncTlsVisibility();
+        syncVaultVisibility();
         update();
       })();
     </script>

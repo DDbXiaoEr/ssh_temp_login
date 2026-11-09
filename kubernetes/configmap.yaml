@@ -13,3 +13,10 @@ data:
         key_file: ""
         client_ca_file: ""
         require_client_cert: false
+    vault:
+      # Vault 开启 mTLS 时填这里；也可以用 VAULT_CACERT 等环境变量覆盖。
+      mtls: false
+      tls_skip_verify: false
+      ca_cert: ""
+      client_cert: ""
+      client_key: ""

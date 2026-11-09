@@ -22,9 +22,9 @@ There are two TLS layers. Do not mix the certificates:
 | Role | Files needed | Where |
 | --- | --- | --- |
 | This service as HTTPS server | CA, server cert, server key | `server.tls` |
-| This service as Vault client | Vault CA, client cert, client key | `VAULT_CACERT` / `VAULT_CLIENT_CERT` / `VAULT_CLIENT_KEY` |
+| This service as Vault client | Vault CA, client cert, client key | `vault.ca_cert` / `vault.client_cert` / `vault.client_key`, or `VAULT_CACERT` / `VAULT_CLIENT_CERT` / `VAULT_CLIENT_KEY` |
 
-Copy `backend/config.example.yaml` to `backend/config.yaml`. It only holds HTTP/TLS settings:
+Copy `backend/config.example.yaml` to `backend/config.yaml`. It holds HTTP/TLS settings and the Vault client certificate:
 
 ```yaml
 server:
@@ -36,11 +36,19 @@ server:
     key_file: "<server-key.pem>"         # this service's private key
     client_ca_file: "<client-ca.pem>"    # CA used to verify clients, not client.crt
     require_client_cert: true
+
+# only when Vault has mTLS enabled
+vault:
+  mtls: true
+  ca_cert: "<vault-ca.pem>"
+  client_cert: "<vault-client-cert.pem>"
+  client_key: "<vault-client-key.pem>"
+  tls_skip_verify: false
 ```
 
-Server-side mTLS only needs those three files. Do not put `client.crt` / `client.key` in `server.tls`.
+Server-side mTLS only needs the three files under `server.tls`. Do not put `client.crt` / `client.key` in `server.tls`.
 
-Vault settings must come from environment variables. Startup validates them and exits with a missing-item list:
+Vault address, token, and role still come from environment variables. Startup validates them and exits with a missing-item list:
 
 ```
 load config: missing required environment variables:
@@ -65,7 +73,7 @@ load config: missing required environment variables:
 
 These variables are only for **this service calling Vault**. They do not enable mTLS on this service's own `:8080`.
 
-If you set `VAULT_MTLS=true`, or fill any of `VAULT_CACERT` / `VAULT_CLIENT_CERT` / `VAULT_CLIENT_KEY`, all three files must exist or startup exits with the missing list.
+If you set `vault.mtls: true`, `VAULT_MTLS=true`, or fill any of the `CA` / `client cert` / `client key` entries, all three files must exist or startup exits with the missing list. The `vault` section in `config.yaml` and environment variables can be mixed; environment variables win.
 
 ```bash
 export VAULT_ADDR="https://<vault-host>:8200"
@@ -74,6 +82,7 @@ export VAULT_ROLE="<ssh-role>"
 export VAULT_DEFAULT_PRINCIPALS="<login-user>"
 
 # only when Vault requires a client cert (this service is Vault's client)
+# these can also live under the vault section in config.yaml
 export VAULT_MTLS="true"
 export VAULT_CACERT="/certs/ca.crt"
 export VAULT_CLIENT_CERT="/certs/client.crt"

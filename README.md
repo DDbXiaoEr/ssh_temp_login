@@ -22,9 +22,9 @@ Makefile     构建、运行、镜像
 | 角色 | 需要的文件 | 配在哪 |
 | --- | --- | --- |
 | 本服务当 HTTPS 服务端 | CA、server 证书、server 私钥 | `server.tls` |
-| 本服务当 Vault 客户端 | Vault CA、client 证书、client 私钥 | `VAULT_CACERT` / `VAULT_CLIENT_CERT` / `VAULT_CLIENT_KEY` |
+| 本服务当 Vault 客户端 | Vault CA、client 证书、client 私钥 | `vault.ca_cert` / `vault.client_cert` / `vault.client_key`，或环境变量 `VAULT_CACERT` / `VAULT_CLIENT_CERT` / `VAULT_CLIENT_KEY` |
 
-复制 `backend/config.example.yaml` 为 `backend/config.yaml`，只放 HTTP/TLS 配置：
+复制 `backend/config.example.yaml` 为 `backend/config.yaml`，放 HTTP/TLS 与连接 Vault 的客户端证书配置：
 
 ```yaml
 server:
@@ -36,11 +36,19 @@ server:
     key_file: "<server-key.pem>"         # 本服务私钥
     client_ca_file: "<client-ca.pem>"    # 校验客户端的 CA，不是 client.crt
     require_client_cert: true
+
+# 仅当 Vault 开启 mTLS 时填写
+vault:
+  mtls: true
+  ca_cert: "<vault-ca.pem>"
+  client_cert: "<vault-client-cert.pem>"
+  client_key: "<vault-client-key.pem>"
+  tls_skip_verify: false
 ```
 
-服务端开 mTLS 只需要上面三份文件，不要把 `client.crt` / `client.key` 写进 `server.tls`。
+服务端开 mTLS 只需要上面 `server.tls` 的三份文件，不要把 `client.crt` / `client.key` 写进 `server.tls`。
 
-Vault 信息必须从环境变量读取。启动时会校验，缺项会列出清单并退出：
+Vault 的地址、token、role 仍从环境变量读取。启动时会校验，缺项会列出清单并退出：
 
 ```
 load config: missing required environment variables:
@@ -65,7 +73,7 @@ load config: missing required environment variables:
 
 这些变量只用于**本服务访问 Vault**，不会让本服务自己的 `:8080` 开启 mTLS。
 
-设置 `VAULT_MTLS=true`，或任意填写 `VAULT_CACERT` / `VAULT_CLIENT_CERT` / `VAULT_CLIENT_KEY` 之一后，三份证书都必须存在，否则同样列出缺失项退出。
+设置 `vault.mtls: true`、`VAULT_MTLS=true`，或任意填写 `CA` / `client 证书` / `client 私钥` 之一后，三份证书文件都必须存在，否则启动时列出缺失项并退出。`config.yaml` 的 `vault` 段与环境变量可以混用，同名环境变量优先。
 
 ```bash
 export VAULT_ADDR="https://<vault-host>:8200"
@@ -74,6 +82,7 @@ export VAULT_ROLE="<ssh-role>"
 export VAULT_DEFAULT_PRINCIPALS="<login-user>"
 
 # 仅当 Vault 要求客户端证书时（本服务作为 Vault 的客户端）
+# 也可以写在 config.yaml 的 vault 段里
 export VAULT_MTLS="true"
 export VAULT_CACERT="/certs/ca.crt"
 export VAULT_CLIENT_CERT="/certs/client.crt"
